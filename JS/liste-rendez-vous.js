@@ -42,11 +42,6 @@ function getAnalysisCode(appointment, index) {
 }
 
 function normalizeAppointment(appointment) {
-    const rawDate = String(appointment.dattcn ?? appointment.DATTCN ?? "");
-    const dateRendezVous = /^\d{8}$/.test(rawDate)
-        ? `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`
-        : rawDate.slice(0, 10);
-
     return {
         telephone: appointment.telcn ?? appointment.TELCN ?? "",
         nom: appointment.nomcn ?? appointment.NOMCN ?? "",
@@ -56,7 +51,12 @@ function normalizeAppointment(appointment) {
         adresse: appointment.adrcn ?? appointment.ADRCN ?? "",
         typeRdv: appointment.typecn ?? appointment.TYPECN ?? "",
         analyses: [1, 2, 3].map(index => getAnalysisCode(appointment, index)).filter(Boolean),
-        dateRendezVous
+        dateEnregistrement: appointment.DATEENREGISTREMENT
+            ?? appointment.dateEnregistrement
+            ?? appointment.dateenregistrement
+            ?? appointment.createdAt
+            ?? appointment.created_at
+            ?? ""
     };
 }
 
@@ -93,28 +93,35 @@ function escapeHTML(value) {
     })[character]);
 }
 
-function formatAppointmentDate(dateValue) {
+function formatRegistrationDateTime(dateValue) {
     if (!dateValue) {
         return "—";
     }
 
-    const [year, month, day] = dateValue.split("-").map(Number);
-    const date = new Date(year, month - 1, day);
-
-    if (
-        Number.isNaN(date.getTime()) ||
-        date.getFullYear() !== year ||
-        date.getMonth() !== month - 1 ||
-        date.getDate() !== day
-    ) {
+    const date = new Date(dateValue);
+    if (Number.isNaN(date.getTime())) {
         return dateValue;
     }
 
     return new Intl.DateTimeFormat("fr-FR", {
         day: "2-digit",
         month: "2-digit",
-        year: "numeric"
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
     }).format(date);
+}
+
+function getRegistrationDateValue(dateValue) {
+    const date = new Date(dateValue);
+    if (Number.isNaN(date.getTime())) {
+        return "";
+    }
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
 }
 
 function formatSex(sex) {
@@ -143,8 +150,9 @@ function getFilteredAppointments() {
         const correspondRecherche = texte.includes(recherche);
         const correspondType = !type || rdv.typeRdv === type;
 
-        const correspondDebut = !startDate || rdv.dateRendezVous >= startDate;
-        const correspondFin = !endDate || rdv.dateRendezVous <= endDate;
+        const dateEnregistrement = getRegistrationDateValue(rdv.dateEnregistrement);
+        const correspondDebut = !startDate || (dateEnregistrement && dateEnregistrement >= startDate);
+        const correspondFin = !endDate || (dateEnregistrement && dateEnregistrement <= endDate);
 
         return correspondRecherche && correspondType && correspondDebut && correspondFin;
     });
@@ -164,7 +172,7 @@ function renderRendezVous() {
 
         return `
             <tr>
-                <td>${escapeHTML(formatAppointmentDate(rdv.dateRendezVous))}</td>
+                <td>${escapeHTML(formatRegistrationDateTime(rdv.dateEnregistrement))}</td>
                 <td>
                     <div class="patient-name">${escapeHTML(rdv.nom)}</div>
                     <div class="patient-firstname">${escapeHTML(rdv.prenom)}</div>
@@ -216,7 +224,7 @@ document.getElementById("exportBtn").addEventListener("click", () => {
     const resultats = getFilteredAppointments();
 
     const colonnes = [
-        "Date du rendez-vous",
+        "Date et heure d’enregistrement",
         "Nom",
         "Prénom",
         "Téléphone",
@@ -228,7 +236,7 @@ document.getElementById("exportBtn").addEventListener("click", () => {
     ];
 
     const lignes = resultats.map(rdv => [
-        formatAppointmentDate(rdv.dateRendezVous),
+        formatRegistrationDateTime(rdv.dateEnregistrement),
         rdv.nom,
         rdv.prenom,
         rdv.telephone,
@@ -317,7 +325,7 @@ document.getElementById("exportPdfBtn").addEventListener("click", function () {
 
     // Préparer les lignes du tableau.
     const lignes = resultats.map(rdv => [
-        formatAppointmentDate(rdv.dateRendezVous),
+        formatRegistrationDateTime(rdv.dateEnregistrement),
         `${rdv.nom} ${rdv.prenom}`,
         rdv.telephone,
         `${rdv.age} ans / ${formatSex(rdv.sexe)}`,
@@ -335,7 +343,7 @@ document.getElementById("exportPdfBtn").addEventListener("click", function () {
     doc.autoTable({
         startY: type ? 50 : 44,
         head: [[
-            "Date du rendez-vous",
+            "Date et heure d’enregistrement",
             "Patient",
             "Téléphone",
             "Âge / Sexe",
