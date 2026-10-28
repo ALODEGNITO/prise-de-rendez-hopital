@@ -269,7 +269,7 @@ form.addEventListener("submit", async (event) => {
 
   const dateEnregistrement = new Date();
   const request = {
-    TELCN: `+229${document.getElementById("telephone").value.trim()}`,
+    TELCN: `+228${document.getElementById("telephone").value.trim()}`,
     NOMCN: document.getElementById("nom").value.trim(),
     PRECN: document.getElementById("prenom").value.trim(),
     AGECN: Number(document.getElementById("age").value),
