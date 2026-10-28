@@ -6,6 +6,7 @@ const analysisIds = ["analyse1", "analyse2", "analyse3"];
 const analysesStatus = document.getElementById("analysesStatus");
 const analysesApiUrl = "https://gdorapis.com/api/WOTTICAANAL";
 const appointmentsApiUrl = "https://gdorapis.com/api/WOTTICARESER";
+const registrationTimesStorageKey = "lunetterieRegistrationTimes";
 let analysesLoaded = false;
 let analysesLoadPromise = null;
 let isSubmitting = false;
@@ -29,6 +30,43 @@ function getLocalDateValue(date = new Date()) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function getLocalDateTimeValue(date = new Date()) {
+  const dateValue = getLocalDateValue(date).replace(/-/g, "");
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  const second = String(date.getSeconds()).padStart(2, "0");
+  return `${dateValue}${hour}${minute}${second}`;
+}
+
+async function getAppointmentFingerprint(appointment) {
+  const canonicalAppointment = [
+    String(appointment.telephone ?? "").replace(/\D/g, ""),
+    String(appointment.nom ?? "").trim().toLocaleUpperCase("fr-FR"),
+    String(appointment.prenom ?? "").trim().toLocaleUpperCase("fr-FR"),
+    String(appointment.age ?? "").trim(),
+    String(appointment.sexe ?? "").trim().toLocaleUpperCase("fr-FR"),
+    String(appointment.adresse ?? "").trim().toLocaleUpperCase("fr-FR"),
+    String(appointment.typeRdv ?? "").trim().toLocaleUpperCase("fr-FR"),
+    (appointment.analyses ?? [])
+      .filter(Boolean)
+      .map((analysis) => String(analysis).trim().toLocaleUpperCase("fr-FR"))
+      .sort()
+  ];
+  const content = new TextEncoder().encode(JSON.stringify(canonicalAppointment));
+  const digest = await crypto.subtle.digest("SHA-256", content);
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function saveRegistrationTime(appointment, registeredAt) {
+  const fingerprint = await getAppointmentFingerprint(appointment);
+  const savedTimes = JSON.parse(localStorage.getItem(registrationTimesStorageKey) || "{}");
+  if (!savedTimes[fingerprint]) {
+    savedTimes[fingerprint] = [];
+  }
+  savedTimes[fingerprint].push(registeredAt.toISOString());
+  localStorage.setItem(registrationTimesStorageKey, JSON.stringify(savedTimes));
 }
 
 function selectedType() {
@@ -279,8 +317,7 @@ form.addEventListener("submit", async (event) => {
     ANA1CN: null,
     ANA2CN: null,
     ANA3CN: null,
-    DATTCN: Number(getLocalDateValue(dateEnregistrement).replace(/-/g, "")),
-    DATEENREGISTREMENT: dateEnregistrement.toISOString()
+    DATTCN: Number(getLocalDateTimeValue(dateEnregistrement))
   };
 
   if (selectedType() === "Analyse") {
@@ -316,6 +353,21 @@ form.addEventListener("submit", async (event) => {
         `La demande n’a pas pu être enregistrée (erreur HTTP ${response.status}). Veuillez réessayer.`;
       formAlert.classList.add("error");
     } else {
+      try {
+        await saveRegistrationTime({
+          telephone: request.TELCN,
+          nom: request.NOMCN,
+          prenom: request.PRECN,
+          age: request.AGECN,
+          sexe: request.SEXCN,
+          adresse: request.ADRCN,
+          typeRdv: request.TYPECN,
+          analyses: [request.ANA1CN, request.ANA2CN, request.ANA3CN]
+        }, dateEnregistrement);
+      } catch (error) {
+        console.error("Impossible de conserver localement la date d’enregistrement :", error);
+      }
+
       formAlert.textContent =
         "Votre demande a bien été enregistrée. Nous vous contacterons par SMS pour vous communiquer la date de votre rendez-vous. Merci de votre visite !";
       formAlert.classList.add("success");
