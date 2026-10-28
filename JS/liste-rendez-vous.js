@@ -1,5 +1,6 @@
 
 const appointmentsApiUrl = "https://gdorapis.com/api/WOTTICARESER";
+const registrationTimesStorageKey = "lunetterieRegistrationTimes";
 let rendezVous = [];
 let loadingError = false;
 
@@ -41,6 +42,43 @@ function getAnalysisCode(appointment, index) {
         ?? "";
 }
 
+function getRegistrationDate(appointment) {
+    const knownFields = [
+        "DATEENREGISTREMENT",
+        "dateEnregistrement",
+        "dateenregistrement",
+        "DATECREATION",
+        "dateCreation",
+        "date_creation",
+        "createdAt",
+        "created_at",
+        "creationDate",
+        "insertionDate",
+        "dateInsertion",
+        "dateInscription",
+        "dateAjout",
+        "timestamp"
+    ];
+
+    for (const field of knownFields) {
+        if (appointment[field] !== undefined && appointment[field] !== null && appointment[field] !== "") {
+            return appointment[field];
+        }
+    }
+
+    const registrationField = Object.keys(appointment).find((field) => {
+        const normalizedField = field.toLowerCase().replace(/[^a-z]/g, "");
+        return /(?:date.*(?:enreg|creat|insert|inscri|ajout|saisie)|(?:enreg|creat|insert|inscri|ajout|saisie).*date|createdat|timestamp)/.test(normalizedField);
+    });
+
+    if (registrationField) {
+        return appointment[registrationField];
+    }
+
+    const rawAppointmentDate = appointment.DATTCN ?? appointment.dattcn;
+    return /^\d{14}$/.test(String(rawAppointmentDate ?? "")) ? rawAppointmentDate : "";
+}
+
 function normalizeAppointment(appointment) {
     return {
         telephone: appointment.telcn ?? appointment.TELCN ?? "",
@@ -51,13 +89,40 @@ function normalizeAppointment(appointment) {
         adresse: appointment.adrcn ?? appointment.ADRCN ?? "",
         typeRdv: appointment.typecn ?? appointment.TYPECN ?? "",
         analyses: [1, 2, 3].map(index => getAnalysisCode(appointment, index)).filter(Boolean),
-        dateEnregistrement: appointment.DATEENREGISTREMENT
-            ?? appointment.dateEnregistrement
-            ?? appointment.dateenregistrement
-            ?? appointment.createdAt
-            ?? appointment.created_at
-            ?? ""
+        dateEnregistrement: getRegistrationDate(appointment)
     };
+}
+
+async function getAppointmentFingerprint(appointment) {
+    const canonicalAppointment = [
+        String(appointment.telephone ?? "").replace(/\D/g, ""),
+        String(appointment.nom ?? "").trim().toLocaleUpperCase("fr-FR"),
+        String(appointment.prenom ?? "").trim().toLocaleUpperCase("fr-FR"),
+        String(appointment.age ?? "").trim(),
+        String(appointment.sexe ?? "").trim().toLocaleUpperCase("fr-FR"),
+        String(appointment.adresse ?? "").trim().toLocaleUpperCase("fr-FR"),
+        String(appointment.typeRdv ?? "").trim().toLocaleUpperCase("fr-FR"),
+        (appointment.analyses ?? [])
+            .filter(Boolean)
+            .map(analysis => String(analysis).trim().toLocaleUpperCase("fr-FR"))
+            .sort()
+    ];
+    const content = new TextEncoder().encode(JSON.stringify(canonicalAppointment));
+    const digest = await crypto.subtle.digest("SHA-256", content);
+    return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function getSavedRegistrationTimes() {
+    try {
+        const savedTimes = JSON.parse(localStorage.getItem(registrationTimesStorageKey) || "{}");
+        if (!savedTimes || typeof savedTimes !== "object" || Array.isArray(savedTimes)) {
+            throw new Error("Le format des dates locales est invalide.");
+        }
+        return savedTimes;
+    } catch (error) {
+        console.error("Impossible de lire les dates d’enregistrement locales :", error);
+        return {};
+    }
 }
 
 async function loadAppointments() {
@@ -74,7 +139,23 @@ async function loadAppointments() {
             throw new Error("La réponse de l’API n’est pas une liste de rendez-vous.");
         }
 
-        rendezVous = data.map(normalizeAppointment);
+        const savedTimes = getSavedRegistrationTimes();
+        const nextSavedTimeIndex = Object.create(null);
+        rendezVous = await Promise.all(data.map(async appointment => {
+            const normalizedAppointment = normalizeAppointment(appointment);
+            if (!normalizedAppointment.dateEnregistrement) {
+                try {
+                    const fingerprint = await getAppointmentFingerprint(normalizedAppointment);
+                    const savedRegistrationTimes = savedTimes[fingerprint] || [];
+                    const savedTimeIndex = nextSavedTimeIndex[fingerprint] || 0;
+                    normalizedAppointment.dateEnregistrement = savedRegistrationTimes[savedTimeIndex] || "";
+                    nextSavedTimeIndex[fingerprint] = savedTimeIndex + 1;
+                } catch (error) {
+                    console.error("Impossible de retrouver la date d’enregistrement locale :", error);
+                }
+            }
+            return normalizedAppointment;
+        }));
         renderRendezVous();
     } catch (error) {
         console.error("Impossible de charger les rendez-vous :", error);
@@ -93,14 +174,31 @@ function escapeHTML(value) {
     })[character]);
 }
 
-function formatRegistrationDateTime(dateValue) {
+function parseRegistrationDate(dateValue) {
     if (!dateValue) {
-        return "—";
+        return null;
     }
 
-    const date = new Date(dateValue);
-    if (Number.isNaN(date.getTime())) {
-        return dateValue;
+    let normalizedValue = dateValue;
+    if (typeof normalizedValue === "number" || /^\d+$/.test(String(normalizedValue))) {
+        const digits = String(normalizedValue);
+        if (/^\d{8}$/.test(digits)) {
+            return null;
+        } else if (/^\d{14}$/.test(digits)) {
+            normalizedValue = `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}T${digits.slice(8, 10)}:${digits.slice(10, 12)}:${digits.slice(12, 14)}`;
+        } else if (/^\d{10}$/.test(digits) || /^\d{13}$/.test(digits)) {
+            normalizedValue = Number(digits) * (digits.length === 10 ? 1000 : 1);
+        }
+    }
+
+    const date = new Date(normalizedValue);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatRegistrationDateTime(dateValue) {
+    const date = parseRegistrationDate(dateValue);
+    if (!date) {
+        return "—";
     }
 
     return new Intl.DateTimeFormat("fr-FR", {
@@ -113,10 +211,8 @@ function formatRegistrationDateTime(dateValue) {
 }
 
 function getRegistrationDateValue(dateValue) {
-    const date = new Date(dateValue);
-    if (Number.isNaN(date.getTime())) {
-        return "";
-    }
+    const date = parseRegistrationDate(dateValue);
+    if (!date) return "";
 
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
