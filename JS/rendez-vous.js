@@ -9,11 +9,10 @@ const appointmentsApiUrl = "https://gdorapis.com/api/WOTTICARESER";
 let analysesLoaded = false;
 let analysesLoadPromise = null;
 let isSubmitting = false;
-const appointmentDateInput = document.getElementById("dateRendezVous");
 const submitButton = form.querySelector('button[type="submit"]');
 const submitButtonLabel = submitButton.querySelector("span");
 
-const fieldIds = ["nom", "prenom", "sexe", "age", "adresse", "telephone", "dateRendezVous"];
+const fieldIds = ["nom", "prenom", "sexe", "age", "adresse", "telephone"];
 const uppercaseFieldIds = ["nom", "prenom", "adresse"];
 const errorMessages = {
   nom: "Veuillez saisir votre nom.",
@@ -22,7 +21,6 @@ const errorMessages = {
   age: "Veuillez saisir un âge valide entre 0 et 120 ans.",
   adresse: "Veuillez renseigner votre adresse ou votre quartier.",
   telephone: "Veuillez saisir un numéro de téléphone valide.",
-  dateRendezVous: "Veuillez choisir aujourd’hui ou une date à venir.",
   analyse1: "Veuillez sélectionner au moins une analyse."
 };
 
@@ -32,12 +30,6 @@ function getLocalDateValue(date = new Date()) {
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
-
-function updateMinimumAppointmentDate() {
-  appointmentDateInput.min = getLocalDateValue();
-}
-
-updateMinimumAppointmentDate();
 
 function selectedType() {
   return document.querySelector('input[name="typeRendezVous"]:checked')?.value || "";
@@ -198,7 +190,6 @@ function validateForm() {
   let valid = true;
   fieldIds.forEach(clearError);
   clearError("analyse1");
-  updateMinimumAppointmentDate();
 
   const values = {
     nom: document.getElementById("nom").value.trim(),
@@ -215,11 +206,6 @@ function validateForm() {
       valid = false;
     }
   });
-
-  if (!appointmentDateInput.value || appointmentDateInput.value < appointmentDateInput.min) {
-    setError("dateRendezVous", errorMessages.dateRendezVous);
-    valid = false;
-  }
 
   const age = Number(values.age);
   if (values.age === "" || !Number.isInteger(age) || age < 0 || age > 120) {
@@ -281,7 +267,7 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
-  const dateRendezVous = appointmentDateInput.value;
+  const dateEnregistrement = new Date();
   const request = {
     TELCN: `+229${document.getElementById("telephone").value.trim()}`,
     NOMCN: document.getElementById("nom").value.trim(),
@@ -293,7 +279,8 @@ form.addEventListener("submit", async (event) => {
     ANA1CN: null,
     ANA2CN: null,
     ANA3CN: null,
-    DATTCN: Number(dateRendezVous.replace(/-/g, ""))
+    DATTCN: Number(getLocalDateValue(dateEnregistrement).replace(/-/g, "")),
+    DATEENREGISTREMENT: dateEnregistrement.toISOString()
   };
 
   if (selectedType() === "Analyse") {
@@ -330,7 +317,7 @@ form.addEventListener("submit", async (event) => {
       formAlert.classList.add("error");
     } else {
       formAlert.textContent =
-        "Votre demande de rendez-vous a été envoyée. Le centre hospitalier vous confirmera la date choisie.";
+        "Votre demande a bien été enregistrée. Nous vous contacterons par SMS pour vous communiquer la date de votre rendez-vous. Merci de votre visite !";
       formAlert.classList.add("success");
       form.reset();
       toggleAnalyses();
