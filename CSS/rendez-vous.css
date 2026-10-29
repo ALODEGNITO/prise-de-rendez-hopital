@@ -146,6 +146,37 @@ input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--da
 .form-alert { margin-top: 18px; padding: 12px 14px; border-radius: 10px; font-size: .86rem; }
 .form-alert.error { border: 1px solid #f0c8ca; color: #8d292f; background: #fff4f4; }
 .form-alert.success { border: 1px solid #b8e3ce; color: #176747; background: #effbf4; }
+.confirmation-content { padding: 38px 44px; text-align: center; }
+.confirmation-icon {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  margin: 0 auto 18px;
+  border-radius: 50%;
+  color: #176747;
+  background: #effbf4;
+  font-size: 1.8rem;
+  font-weight: 700;
+}
+.confirmation-content h2 { margin: 0 0 10px; font-size: 1.2rem; }
+.confirmation-content p { max-width: 560px; margin: 0 auto; color: var(--muted); font-size: .92rem; }
+.back-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  margin-top: 26px;
+  padding: 12px 20px;
+  border-radius: 10px;
+  color: white;
+  background: linear-gradient(100deg, var(--primary-dark), var(--primary));
+  box-shadow: 0 8px 18px rgba(47,120,183,.2);
+  font-weight: 700;
+  text-decoration: none;
+}
+.back-button:hover { background: var(--primary-dark); }
+.back-button:focus-visible { outline: 3px solid #9dc3e1; outline-offset: 3px; }
 .submit-button {
   display: flex;
   align-items: center;
@@ -178,6 +209,7 @@ input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--da
   .hero { padding: 27px 22px 25px; }
   .brand-logo { width: min(100%, 300px); margin-bottom: 17px; }
   .form-content { padding: 27px 21px 23px; }
+  .confirmation-content { padding: 32px 21px; }
   .form-grid { grid-template-columns: 1fr; gap: 16px; }
   .field-full { grid-column: auto; }
   .option-grid { grid-template-columns: 1fr; gap: 10px; }
