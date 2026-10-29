@@ -1,8 +1,10 @@
 
 const appointmentsApiUrl = "https://gdorapis.com/api/WOTTICARESER";
+const analysesApiUrl = "https://gdorapis.com/api/WOTTICAANAL";
 const registrationTimesStorageKey = "lunetterieRegistrationTimes";
 let rendezVous = [];
 let loadingError = false;
+let analysisLabelsByCode = new Map();
 
 const appointmentsBody = document.getElementById("appointmentsBody");
 const searchInput = document.getElementById("searchInput");
@@ -48,6 +50,41 @@ function getAnalysisCode(appointment, index) {
         ?? "";
 }
 
+function getAnalysisLabel(appointment, index) {
+    return appointment[`ANA${index}LCN`]
+        ?? appointment[`anA${index}LCN`]
+        ?? appointment[`ana${index}lcn`]
+        ?? "";
+}
+
+async function loadAnalysisLabels() {
+    try {
+        const response = await fetch(analysesApiUrl, {
+            headers: { "Accept": "application/json" }
+        });
+        if (!response.ok) {
+            throw new Error(`La requête a échoué (HTTP ${response.status}).`);
+        }
+
+        const data = await response.json();
+        if (!Array.isArray(data)) {
+            throw new Error("La réponse de l’API des analyses n’est pas une liste.");
+        }
+
+        analysisLabelsByCode = new Map(data
+            .filter(analysis =>
+                analysis &&
+                typeof analysis.codean === "string" &&
+                typeof analysis.libcan === "string" &&
+                analysis.codean.trim() &&
+                analysis.libcan.trim()
+            )
+            .map(analysis => [analysis.codean.trim().toLocaleUpperCase("fr-FR"), analysis.libcan.trim()]));
+    } catch (error) {
+        console.error("Impossible de charger les libellés des analyses :", error);
+    }
+}
+
 function getRegistrationDate(appointment) {
     const knownFields = [
         "DATEENREGISTREMENT",
@@ -86,6 +123,14 @@ function getRegistrationDate(appointment) {
 }
 
 function normalizeAppointment(appointment) {
+    const analysisDetails = [1, 2, 3].map(index => {
+        const code = getAnalysisCode(appointment, index);
+        const label = getAnalysisLabel(appointment, index)
+            || analysisLabelsByCode.get(String(code).trim().toLocaleUpperCase("fr-FR"))
+            || "";
+        return { code, label };
+    }).filter(analysis => analysis.code || analysis.label);
+
     return {
         telephone: appointment.telcn ?? appointment.TELCN ?? "",
         nom: appointment.nomcn ?? appointment.NOMCN ?? "",
@@ -94,7 +139,9 @@ function normalizeAppointment(appointment) {
         sexe: appointment.sexcn ?? appointment.SEXCN ?? "",
         adresse: appointment.adrcn ?? appointment.ADRCN ?? "",
         typeRdv: appointment.typecn ?? appointment.TYPECN ?? "",
-        analyses: [1, 2, 3].map(index => getAnalysisCode(appointment, index)).filter(Boolean),
+        analyses: analysisDetails.map(analysis => analysis.code).filter(Boolean),
+        analysisLabels: analysisDetails.map(analysis => analysis.label || analysis.code).filter(Boolean),
+        analysisDetails,
         dateEnregistrement: getRegistrationDate(appointment)
     };
 }
@@ -133,6 +180,7 @@ function getSavedRegistrationTimes() {
 
 async function loadAppointments() {
     try {
+        await loadAnalysisLabels();
         const response = await fetch(appointmentsApiUrl, {
             headers: { "Accept": "application/json" }
         });
@@ -246,7 +294,8 @@ function getFilteredAppointments() {
             rdv.adresse,
             formatSex(rdv.sexe),
             rdv.typeRdv,
-            ...(rdv.analyses || [])
+            ...(rdv.analyses || []),
+            ...(rdv.analysisLabels || [])
         ].join(" ").toLowerCase();
 
         const correspondRecherche = texte.includes(recherche);
@@ -272,8 +321,12 @@ function renderRendezVous() {
             ? "type-analyse"
             : "type-consultation";
 
-        const analyses = rdv.analyses?.length
-            ? rdv.analyses.map(escapeHTML).join(", ")
+        const analyses = rdv.analysisDetails?.length
+            ? rdv.analysisDetails.map(analysis => {
+                const code = escapeHTML(analysis.code);
+                const label = escapeHTML(analysis.label);
+                return label && label !== code ? `${code} - ${label}` : code || label;
+            }).join(", ")
             : '<span class="muted">—</span>';
 
         return `
@@ -376,7 +429,9 @@ document.getElementById("exportBtn").addEventListener("click", () => {
         formatSex(rdv.sexe),
         rdv.adresse,
         rdv.typeRdv,
-        (rdv.analyses || []).join("; ")
+        (rdv.analysisDetails || []).map(analysis =>
+            [analysis.code, analysis.label].filter(Boolean).join(" - ")
+        ).join("; ")
     ]);
 
     const csv = [colonnes, ...lignes]
@@ -462,7 +517,9 @@ document.getElementById("exportPdfBtn").addEventListener("click", function () {
         rdv.telephone,
         `${rdv.age} ans / ${formatSex(rdv.sexe)}`,
         rdv.typeRdv,
-        (rdv.analyses || []).join(", ") || "-",
+        (rdv.analysisDetails || []).map(analysis =>
+            [analysis.code, analysis.label].filter(Boolean).join(" - ")
+        ).join(", ") || "-",
         rdv.adresse
     ]);
 
