@@ -11,6 +11,12 @@ const dateStartFilter = document.getElementById("dateStartFilter");
 const dateEndFilter = document.getElementById("dateEndFilter");
 const emptyState = document.getElementById("emptyState");
 const resultsCount = document.getElementById("resultsCount");
+const pagination = document.getElementById("pagination");
+const previousPageButton = document.getElementById("previousPage");
+const nextPageButton = document.getElementById("nextPage");
+const pageInfo = document.getElementById("pageInfo");
+const rowsPerPage = 10;
+let currentPage = 1;
 
 emptyState.querySelector("h3").textContent = "Chargement des rendez-vous";
 emptyState.querySelector("p").textContent = "Veuillez patienter pendant la récupération des données.";
@@ -76,7 +82,7 @@ function getRegistrationDate(appointment) {
     }
 
     const rawAppointmentDate = appointment.DATTCN ?? appointment.dattcn;
-    return /^\d{14}$/.test(String(rawAppointmentDate ?? "")) ? rawAppointmentDate : "";
+    return /^\d{8}(?:\d{6})?$/.test(String(rawAppointmentDate ?? "")) ? rawAppointmentDate : "";
 }
 
 function normalizeAppointment(appointment) {
@@ -183,19 +189,21 @@ function parseRegistrationDate(dateValue) {
     if (typeof normalizedValue === "number" || /^\d+$/.test(String(normalizedValue))) {
         const digits = String(normalizedValue);
         if (/^\d{8}$/.test(digits)) {
-            return null;
+            normalizedValue = `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}T00:00:00`;
         } else if (/^\d{14}$/.test(digits)) {
             normalizedValue = `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}T${digits.slice(8, 10)}:${digits.slice(10, 12)}:${digits.slice(12, 14)}`;
         } else if (/^\d{10}$/.test(digits) || /^\d{13}$/.test(digits)) {
             normalizedValue = Number(digits) * (digits.length === 10 ? 1000 : 1);
         }
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(String(normalizedValue))) {
+        normalizedValue = `${normalizedValue}T00:00:00`;
     }
 
     const date = new Date(normalizedValue);
     return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function formatRegistrationDateTime(dateValue) {
+function formatRegistrationDate(dateValue) {
     const date = parseRegistrationDate(dateValue);
     if (!date) {
         return "—";
@@ -204,9 +212,7 @@ function formatRegistrationDateTime(dateValue) {
     return new Intl.DateTimeFormat("fr-FR", {
         day: "2-digit",
         month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit"
+        year: "numeric"
     }).format(date);
 }
 
@@ -256,8 +262,12 @@ function getFilteredAppointments() {
 
 function renderRendezVous() {
     const resultats = getFilteredAppointments();
+    const totalPages = Math.ceil(resultats.length / rowsPerPage);
+    currentPage = Math.min(currentPage, Math.max(totalPages, 1));
+    const startIndex = (currentPage - 1) * rowsPerPage;
+    const rendezVousPage = resultats.slice(startIndex, startIndex + rowsPerPage);
 
-    appointmentsBody.innerHTML = resultats.map(rdv => {
+    appointmentsBody.innerHTML = rendezVousPage.map(rdv => {
         const classeType = rdv.typeRdv === "Analyse"
             ? "type-analyse"
             : "type-consultation";
@@ -268,7 +278,7 @@ function renderRendezVous() {
 
         return `
             <tr>
-                <td>${escapeHTML(formatRegistrationDateTime(rdv.dateEnregistrement))}</td>
+                <td>${escapeHTML(formatRegistrationDate(rdv.dateEnregistrement))}</td>
                 <td>
                     <div class="patient-name">${escapeHTML(rdv.nom)}</div>
                     <div class="patient-firstname">${escapeHTML(rdv.prenom)}</div>
@@ -297,22 +307,48 @@ function renderRendezVous() {
         emptyState.querySelector("p").textContent =
             "Essayez de modifier votre recherche ou votre filtre.";
     }
-    resultsCount.textContent =
-        `${resultats.length} rendez-vous affiché(s) sur ${rendezVous.length}`;
+    resultsCount.textContent = resultats.length
+        ? `Affichage de ${startIndex + 1} à ${Math.min(startIndex + rowsPerPage, resultats.length)} sur ${resultats.length} rendez-vous`
+        : `0 rendez-vous affiché sur ${rendezVous.length}`;
+    pagination.hidden = resultats.length <= rowsPerPage;
+    pageInfo.textContent = `Page ${currentPage} sur ${Math.max(totalPages, 1)}`;
+    previousPageButton.disabled = currentPage <= 1;
+    nextPageButton.disabled = currentPage >= totalPages;
 
     updateStatistics();
 }
 
-searchInput.addEventListener("input", renderRendezVous);
-typeFilter.addEventListener("change", renderRendezVous);
-dateStartFilter.addEventListener("input", renderRendezVous);
-dateEndFilter.addEventListener("input", renderRendezVous);
+function resetPageAndRender() {
+    currentPage = 1;
+    renderRendezVous();
+}
+
+searchInput.addEventListener("input", resetPageAndRender);
+typeFilter.addEventListener("change", resetPageAndRender);
+dateStartFilter.addEventListener("input", resetPageAndRender);
+dateEndFilter.addEventListener("input", resetPageAndRender);
+
+previousPageButton.addEventListener("click", () => {
+    if (currentPage > 1) {
+        currentPage -= 1;
+        renderRendezVous();
+    }
+});
+
+nextPageButton.addEventListener("click", () => {
+    const totalPages = Math.ceil(getFilteredAppointments().length / rowsPerPage);
+    if (currentPage < totalPages) {
+        currentPage += 1;
+        renderRendezVous();
+    }
+});
 
 document.getElementById("resetFilters").addEventListener("click", () => {
     searchInput.value = "";
     typeFilter.value = "";
     dateStartFilter.value = "";
     dateEndFilter.value = "";
+    currentPage = 1;
     renderRendezVous();
 });
 
@@ -320,7 +356,7 @@ document.getElementById("exportBtn").addEventListener("click", () => {
     const resultats = getFilteredAppointments();
 
     const colonnes = [
-        "Date et heure d’enregistrement",
+        "Date d’enregistrement",
         "Nom",
         "Prénom",
         "Téléphone",
@@ -332,7 +368,7 @@ document.getElementById("exportBtn").addEventListener("click", () => {
     ];
 
     const lignes = resultats.map(rdv => [
-        formatRegistrationDateTime(rdv.dateEnregistrement),
+        formatRegistrationDate(rdv.dateEnregistrement),
         rdv.nom,
         rdv.prenom,
         rdv.telephone,
@@ -421,7 +457,7 @@ document.getElementById("exportPdfBtn").addEventListener("click", function () {
 
     // Préparer les lignes du tableau.
     const lignes = resultats.map(rdv => [
-        formatRegistrationDateTime(rdv.dateEnregistrement),
+        formatRegistrationDate(rdv.dateEnregistrement),
         `${rdv.nom} ${rdv.prenom}`,
         rdv.telephone,
         `${rdv.age} ans / ${formatSex(rdv.sexe)}`,
@@ -439,7 +475,7 @@ document.getElementById("exportPdfBtn").addEventListener("click", function () {
     doc.autoTable({
         startY: type ? 50 : 44,
         head: [[
-            "Date et heure d’enregistrement",
+            "Date d’enregistrement",
             "Patient",
             "Téléphone",
             "Âge / Sexe",
@@ -470,7 +506,7 @@ document.getElementById("exportPdfBtn").addEventListener("click", function () {
         },
 
         columnStyles: {
-            0: { cellWidth: 32 },
+            0: { cellWidth: 25 },
             1: { cellWidth: 38 },
             2: { cellWidth: 30 },
             3: { cellWidth: 28 },
