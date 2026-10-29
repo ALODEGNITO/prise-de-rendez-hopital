@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Liste des rendez-vous | Lunetterie Famille Sainte Optica</title>
     <link rel="icon" type="image/jpeg" href="images/medicine.png">
-    <link rel="stylesheet" href="CSS/liste-rendez-vous.css">
+    <link rel="stylesheet" href="css/liste-rendez-vous.css">
 </head>
 <body>
 
@@ -115,7 +115,7 @@
                     <table>
                         <thead>
                             <tr>
-                                <th>Date et heure d’enregistrement</th>
+                                <th>Date d’enregistrement</th>
                                 <th>Patient</th>
                                 <th>Téléphone</th>
                                 <th>Âge / Sexe</th>
@@ -136,6 +136,11 @@
 
                 <div class="table-footer">
                     <span id="resultsCount">0 rendez-vous</span>
+                    <nav class="pagination" id="pagination" aria-label="Pagination des rendez-vous" hidden>
+                        <button type="button" id="previousPage" class="pagination-button">Précédent</button>
+                        <span id="pageInfo" aria-live="polite"></span>
+                        <button type="button" id="nextPage" class="pagination-button">Suivant</button>
+                    </nav>
                     <button type="button" id="resetFilters" class="reset-button">
                         Réinitialiser les filtres
                     </button>
@@ -152,6 +157,6 @@
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
-    <script src="JS/liste-rendez-vous.js"></script>
+    <script src="js/liste-rendez-vous.js"></script>
 </body>
 </html>
