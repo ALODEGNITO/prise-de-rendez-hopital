@@ -32,14 +32,6 @@ function getLocalDateValue(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
-function getLocalDateTimeValue(date = new Date()) {
-  const dateValue = getLocalDateValue(date).replace(/-/g, "");
-  const hour = String(date.getHours()).padStart(2, "0");
-  const minute = String(date.getMinutes()).padStart(2, "0");
-  const second = String(date.getSeconds()).padStart(2, "0");
-  return `${dateValue}${hour}${minute}${second}`;
-}
-
 async function getAppointmentFingerprint(appointment) {
   const canonicalAppointment = [
     String(appointment.telephone ?? "").replace(/\D/g, ""),
@@ -317,7 +309,7 @@ form.addEventListener("submit", async (event) => {
     ANA1CN: null,
     ANA2CN: null,
     ANA3CN: null,
-    DATTCN: Number(getLocalDateTimeValue(dateEnregistrement))
+    DATTCN: Number(getLocalDateValue(dateEnregistrement).replace(/-/g, ""))
   };
 
   if (selectedType() === "Analyse") {
