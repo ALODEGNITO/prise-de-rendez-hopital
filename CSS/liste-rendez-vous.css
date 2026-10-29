@@ -400,6 +400,37 @@ tbody tr:hover {
     font-size: 11px;
 }
 
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.pagination[hidden] {
+    display: none;
+}
+
+.pagination-button {
+    border: 1px solid #cddfe2;
+    border-radius: 7px;
+    padding: 8px 11px;
+    background: white;
+    color: var(--primary-dark);
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.pagination-button:hover:not(:disabled) {
+    background: #f0fafa;
+}
+
+.pagination-button:disabled {
+    color: #9aa7ad;
+    cursor: not-allowed;
+    opacity: 0.65;
+}
+
 .reset-button {
     background: transparent;
     color: var(--primary-dark);
