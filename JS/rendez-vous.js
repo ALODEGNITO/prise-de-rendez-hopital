@@ -324,6 +324,7 @@ form.addEventListener("submit", async (event) => {
   isSubmitting = true;
   submitButton.disabled = true;
   submitButtonLabel.textContent = "Envoi en cours…";
+  let submissionSucceeded = false;
 
   try {
     const response = await fetch(appointmentsApiUrl, {
@@ -360,15 +361,8 @@ form.addEventListener("submit", async (event) => {
         console.error("Impossible de conserver localement la date d’enregistrement :", error);
       }
 
-      formAlert.textContent =
-        "Votre demande a bien été enregistrée. Nous vous contacterons par SMS pour vous communiquer la date de votre rendez-vous. Merci de votre visite !";
-      formAlert.classList.add("success");
-      form.reset();
-      toggleAnalyses();
-      fieldIds.forEach(clearError);
-      clearError("analyse1");
-      document.getElementById("typeRendezVousError").textContent = "";
-      document.getElementById("confirmationError").textContent = "";
+      submissionSucceeded = true;
+      window.location.assign("message-confirme.html");
     }
   } catch (error) {
     console.error("Impossible d’envoyer la demande de rendez-vous :", error);
@@ -379,8 +373,10 @@ form.addEventListener("submit", async (event) => {
     isSubmitting = false;
     submitButton.disabled = false;
     submitButtonLabel.textContent = "Envoyer ma demande";
-    formAlert.hidden = false;
-    formAlert.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    if (!submissionSucceeded) {
+      formAlert.hidden = false;
+      formAlert.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
   }
 });
 
