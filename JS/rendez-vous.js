@@ -299,7 +299,7 @@ form.addEventListener("submit", async (event) => {
 
   const dateEnregistrement = new Date();
   const request = {
-    TELCN: `+228${document.getElementById("telephone").value.trim()}`,
+    TELCN: document.getElementById("telephone").value.trim(),
     NOMCN: document.getElementById("nom").value.trim(),
     PRECN: document.getElementById("prenom").value.trim(),
     AGECN: Number(document.getElementById("age").value),
@@ -309,12 +309,19 @@ form.addEventListener("submit", async (event) => {
     ANA1CN: null,
     ANA2CN: null,
     ANA3CN: null,
+    ANA1LCN: null,
+    ANA2LCN: null,
+    ANA3LCN: null,
     DATTCN: Number(getLocalDateValue(dateEnregistrement).replace(/-/g, ""))
   };
 
   if (selectedType() === "Analyse") {
     analysisIds.forEach((id, index) => {
-      request[`ANA${index + 1}CN`] = document.getElementById(id).value || null;
+      const select = document.getElementById(id);
+      request[`ANA${index + 1}CN`] = select.value || null;
+      request[`ANA${index + 1}LCN`] = select.value
+        ? select.selectedOptions[0]?.textContent.trim() || null
+        : null;
     });
   }
 
